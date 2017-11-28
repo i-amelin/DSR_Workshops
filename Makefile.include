@@ -1,0 +1,40 @@
+LIBNAME        = stm_spl 
+FP_FLAGS       ?= -mfloat-abi=hard -mfpu=fpv4-sp-d16
+ARCH_FLAGS     = -mthumb -mcpu=cortex-m4 $(FP_FLAGS)
+STARTUP_S      = $(BUILD_HOME)/stm_spl/startup_stm32f40_41xxx.S
+STARTUP        = ${STARTUP_S:.S=.o}
+
+################################################################################
+# OpenOCD specific variables
+
+OOCD           ?= openocd
+OOCD_INTERFACE ?= stlink-v2
+OOCD_BOARD     ?= stm32f4discovery
+
+################################################################################
+# Black Magic Probe specific variables
+# Set the BMP_PORT to a serial port and then BMP is used for flashing
+BMP_PORT        ?=
+
+################################################################################
+# texane/stlink specific variables
+#STLINK_PORT        ?= :4242
+
+################################################################################
+# Common sources for all workshops
+SRCS = ../common/stm32f4xx_it.c ../common/system_stm32f4xx.c
+
+OBJS = ${SRCS:.c=.o}
+
+################################################################################
+# Common defines for all workshops
+DEFS = -DUSE_STDPERIPH_DRIVER -DSTM32F40_41xxx -DUSE_STM32F4DISC_EVAL \
+       -DUSE_EXT_LEDS
+INCLUDE_DIRS = -I../include
+
+################################################################################
+# Linker script for all workshops
+LDSCRIPT = $(BUILD_HOME)/ld/stm32f4xx_flash.ld
+
+
+include $(BUILD_HOME)/Makefile.rules
