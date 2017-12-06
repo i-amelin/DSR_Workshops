@@ -1,0 +1,121 @@
+#include "main.h"
+
+#define RED GPIO_Pin_8
+#define GREEN GPIO_Pin_9
+#define BLUE GPIO_Pin_10
+#define LEDS RED | GREEN | BLUE
+
+#define LEFT_BUTTON GPIO_Pin_0
+
+#define PERIOD 1600 
+#define PRESCALER 1680
+
+int currentBrightness;
+int brightness[] = { 80, 160, 320, 800, 1200, 1600 };
+
+void initLedsAndButton(void);
+void initTIM(void);
+void initOC(void);
+void initNVIC(void);
+void initEXTI(void);
+void TIM2_IRQHandler(void);
+void EXTI0_IRQHandler(void);
+
+int main(void)
+{
+  currentBrightness = 0;
+
+  initTIM();
+  initOC();
+  initEXTI();
+  initNVIC();
+  initLedsAndButton();
+
+  GPIO_SetBits(GPIOA, LEDS);
+  GPIO_ResetBits(GPIOA, RED);
+
+  while (1) {
+  }
+}
+
+void initLedsAndButton(void) {
+    GPIO_InitTypeDef gpio_struct;
+    
+    // Init leds
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+    
+    GPIO_PinAFConfig(GPIOA, GPIO_PinSource8, GPIO_AF_TIM1);
+    gpio_struct.GPIO_Pin = RED;
+    gpio_struct.GPIO_Mode = GPIO_Mode_AF;
+    gpio_struct.GPIO_OType = GPIO_OType_PP;
+    gpio_struct.GPIO_Speed = GPIO_Speed_100MHz;
+    gpio_struct.GPIO_PuPd = GPIO_PuPd_NOPULL;
+    GPIO_Init(GPIOA, &gpio_struct);
+
+    // Init a button
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
+    //gpio_struct.GPIO_Pin = LEFT_BUTTON;
+    gpio_struct.GPIO_Mode = GPIO_Mode_IN;
+    //gpio_struct.GPIO_PuPd = GPIO_PuPd_UP;
+    //GPIO_Init(GPIOE, &gpio_struct);
+
+    gpio_struct.GPIO_Pin = GPIO_Pin_0;
+    gpio_struct.GPIO_PuPd = GPIO_PuPd_DOWN;
+    GPIO_Init(GPIOA, &gpio_struct);
+}
+
+void initTIM(void) {
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+    TIM_TimeBaseInitTypeDef tim_struct;
+    tim_struct.TIM_Period = (uint16_t)(PERIOD - 1);
+    tim_struct.TIM_Prescaler = (uint16_t)(PRESCALER - 1);
+    tim_struct.TIM_ClockDivision = 0;
+    tim_struct.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM1, &tim_struct);
+    //TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+    TIM_CtrlPWMOutputs(TIM1, ENABLE);
+    TIM_Cmd(TIM1, ENABLE);
+}
+
+void initOC(void) {
+    TIM_OCInitTypeDef oc_struct;
+    oc_struct.TIM_OCMode = TIM_OCMode_PWM1;
+    oc_struct.TIM_OutputState = TIM_OutputState_Enable;
+    oc_struct.TIM_OCPolarity = TIM_OCPolarity_Low;
+    oc_struct.TIM_Pulse = brightness[0];
+
+    TIM_OC1Init(TIM1, &oc_struct);
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+}
+
+void initNVIC(void) {
+    NVIC_InitTypeDef nvic_struct;
+
+    // Init NVIC for a external interrupt
+    nvic_struct.NVIC_IRQChannel = EXTI0_IRQn;
+    nvic_struct.NVIC_IRQChannelPreemptionPriority = 0;
+    nvic_struct.NVIC_IRQChannelSubPriority = 0;
+    nvic_struct.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic_struct);
+}
+
+void initEXTI(void) {
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_SYSCFG, ENABLE);
+    SYSCFG_EXTILineConfig(EXTI_PortSourceGPIOA, EXTI_PinSource0);
+    
+    EXTI_InitTypeDef exti_struct;
+    exti_struct.EXTI_Line = EXTI_Line0;
+    exti_struct.EXTI_LineCmd = ENABLE;
+    exti_struct.EXTI_Mode = EXTI_Mode_Interrupt;
+    exti_struct.EXTI_Trigger = EXTI_Trigger_Rising;
+    EXTI_Init(&exti_struct);
+}
+
+void EXTI0_IRQHandler(void) {
+    if (EXTI_GetITStatus(EXTI_Line0) != RESET) {
+        currentBrightness++;
+        currentBrightness %= 6;
+        TIM_SetCompare1(TIM1, brightness[currentBrightness]);
+        EXTI_ClearITPendingBit(EXTI_Line0);
+    }
+}
