@@ -24,6 +24,7 @@ void initEXTI(void);
 void TIM2_IRQHandler(void);
 void EXTI0_IRQHandler(void);
 void EXTI1_IRQHandler(void);
+void lightLeds(void);
 
 int main(void) {
     currentColor = 0;
@@ -33,9 +34,6 @@ int main(void) {
     initEXTI();
     initNVIC();
     initLedsAndButton();
-
-    GPIO_SetBits(GPIOA, LEDS);
-    GPIO_ResetBits(GPIOA, RED);
 
     while (1) {
     }
@@ -129,7 +127,23 @@ void EXTI0_IRQHandler(void) {
         uint8_t currentBrightness = currentBrightnesses[currentColor] + 1;
         currentBrightness %= 7;
         currentBrightnesses[currentColor] = currentBrightness;
-        switch (currentColor) {
+        lightLeds();
+        EXTI_ClearITPendingBit(EXTI_Line0);
+    }
+}
+
+void EXTI1_IRQHandler(void) {
+    if (EXTI_GetITStatus(EXTI_Line1) != RESET) {
+        currentColor++;
+        currentColor %= 3;
+        lightLeds();
+        EXTI_ClearITPendingBit(EXTI_Line1);
+    }
+}
+
+void lightLeds(void) {
+    uint8_t currentBrightness = currentBrightnesses[currentColor];
+    switch (currentColor) {
         case 0:
             TIM_SetCompare1(TIM1, brightness[currentBrightness]);
             TIM_SetCompare2(TIM1, 0);
@@ -146,16 +160,4 @@ void EXTI0_IRQHandler(void) {
             TIM_SetCompare3(TIM1, brightness[currentBrightness]);
             break;
         }
-        EXTI_ClearITPendingBit(EXTI_Line0);
-    }
-}
-
-void EXTI1_IRQHandler(void) {
-    if (EXTI_GetITStatus(EXTI_Line1) != RESET) {
-        GPIO_ToggleBits(GPIOA, leds[currentColor]);
-        currentColor++;
-        currentColor %= 3;
-        GPIO_ToggleBits(GPIOA, leds[currentColor]);
-        EXTI_ClearITPendingBit(EXTI_Line1);
-    }
 }
