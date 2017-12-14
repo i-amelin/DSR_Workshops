@@ -5,16 +5,25 @@
 #define BLUE GPIO_Pin_10
 #define LEDS RED | GREEN | BLUE
 
+#define BOARD_RED GPIO_Pin_14
+#define BOARD_GREEN GPIO_Pin_12
+#define BOARD_BLUE GPIO_Pin_15
+#define BOARD_LEDS BOARD_RED | BOARD_GREEN | BOARD_BLUE
+
 #define LEFT_BUTTON GPIO_Pin_0
 #define RIGHT_BUTTON GPIO_Pin_1
 
 #define PERIOD 1600 
 #define PRESCALER 1680
 
+#define DEBOUNCE_DELAY 200
+
 const int leds[] = { RED, GREEN, BLUE };
 const int brightness[] = { 0, 80, 160, 320, 800, 1200, 1600 };
 int currentBrightnesses[] = { 0, 0, 0 };
 int currentColor;
+
+int left_button_delay, right_button_delay;
 
 void initLedsAndButton(void);
 void initTIM(void);
@@ -24,10 +33,13 @@ void initEXTI(void);
 void TIM2_IRQHandler(void);
 void EXTI0_IRQHandler(void);
 void EXTI1_IRQHandler(void);
+void SysTick_Handler(void);
 void lightLeds(void);
 
 int main(void) {
     currentColor = 0;
+    left_button_delay = 0;
+    right_button_delay = 0;
 
     initTIM();
     initOC();
@@ -44,6 +56,7 @@ void initLedsAndButton(void) {
     
     // Init leds
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
     
     GPIO_PinAFConfig(GPIOA, GPIO_PinSource8, GPIO_AF_TIM1);
@@ -55,6 +68,16 @@ void initLedsAndButton(void) {
     gpio_struct.GPIO_Speed = GPIO_Speed_100MHz;
     gpio_struct.GPIO_PuPd = GPIO_PuPd_NOPULL;
     GPIO_Init(GPIOA, &gpio_struct);
+
+    gpio_struct.GPIO_Pin = BOARD_LEDS;
+    gpio_struct.GPIO_Mode = GPIO_Mode_OUT;
+    gpio_struct.GPIO_Speed = GPIO_Speed_100MHz;
+    gpio_struct.GPIO_OType = GPIO_OType_PP;
+    gpio_struct.GPIO_PuPd = GPIO_PuPd_NOPULL;
+    GPIO_Init(GPIOD, &gpio_struct);
+
+    GPIO_ResetBits(GPIOD, BOARD_LEDS);
+    GPIO_SetBits(GPIOD, BOARD_RED);
 
     // Init buttons
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOE, ENABLE);
@@ -74,6 +97,8 @@ void initTIM(void) {
     TIM_TimeBaseInit(TIM1, &tim_struct);
     TIM_CtrlPWMOutputs(TIM1, ENABLE);
     TIM_Cmd(TIM1, ENABLE);
+
+    SysTick_Config(SystemCoreClock / 1000);
 }
 
 void initOC(void) {
@@ -124,21 +149,32 @@ void initEXTI(void) {
 
 void EXTI0_IRQHandler(void) {
     if (EXTI_GetITStatus(EXTI_Line0) != RESET) {
-        uint8_t currentBrightness = currentBrightnesses[currentColor] + 1;
-        currentBrightness %= 7;
-        currentBrightnesses[currentColor] = currentBrightness;
-        lightLeds();
-        EXTI_ClearITPendingBit(EXTI_Line0);
+        if (left_button_delay > DEBOUNCE_DELAY) {
+            left_button_delay = 0;
+            uint8_t currentBrightness = currentBrightnesses[currentColor] + 1;
+            currentBrightness %= 7;
+            currentBrightnesses[currentColor] = currentBrightness;
+            lightLeds();
+        }
     }
+    EXTI_ClearITPendingBit(EXTI_Line0);
 }
 
 void EXTI1_IRQHandler(void) {
     if (EXTI_GetITStatus(EXTI_Line1) != RESET) {
-        currentColor++;
-        currentColor %= 3;
-        lightLeds();
-        EXTI_ClearITPendingBit(EXTI_Line1);
+        if (right_button_delay > DEBOUNCE_DELAY) {
+            right_button_delay = 0;
+            currentColor++;
+            currentColor %= 3;
+            lightLeds();
+        }
     }
+    EXTI_ClearITPendingBit(EXTI_Line1);
+}
+
+void SysTick_Handler(void) {
+    left_button_delay++;
+    right_button_delay++;
 }
 
 void lightLeds(void) {
@@ -146,18 +182,18 @@ void lightLeds(void) {
     switch (currentColor) {
         case 0:
             TIM_SetCompare1(TIM1, brightness[currentBrightness]);
-            TIM_SetCompare2(TIM1, 0);
-            TIM_SetCompare3(TIM1, 0);
+            GPIO_ResetBits(GPIOD, BOARD_BLUE);
+            GPIO_SetBits(GPIOD, BOARD_RED);
             break;
         case 1:
-            TIM_SetCompare1(TIM1, 0);
             TIM_SetCompare2(TIM1, brightness[currentBrightness]);
-            TIM_SetCompare3(TIM1, 0);
+            GPIO_ResetBits(GPIOD, BOARD_RED);
+            GPIO_SetBits(GPIOD, BOARD_GREEN);
             break;
         case 2:
-            TIM_SetCompare1(TIM1, 0);
-            TIM_SetCompare2(TIM1, 0);
             TIM_SetCompare3(TIM1, brightness[currentBrightness]);
+            GPIO_ResetBits(GPIOD, BOARD_GREEN);
+            GPIO_SetBits(GPIOD, BOARD_BLUE);
             break;
         }
 }
