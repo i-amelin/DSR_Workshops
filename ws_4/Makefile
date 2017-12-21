@@ -17,10 +17,14 @@
 ## along with this library. If not, see <http://www.gnu.org/licenses/>.
 ##
 
+BUILD_HOME=../..
+
 all: images
 
-BUILD_HOME=../..
+CFLAGS += -I$(BUILD_HOME)/amelin_workshop/libled
+LDFLAGS += -L$(BUILD_HOME)/amelin_workshop/libled
+LDLIBS += -lled
 
 BINARY = main
 
-include $(BUILD_HOME)/src/Makefile.include
+include $(BUILD_HOME)/amelin_workshop/Makefile.include
